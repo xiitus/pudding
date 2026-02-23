@@ -1,68 +1,69 @@
 # pudding
 
-zellij を参考に、機能を最小限まで削ったペイン・マルチプレクサです。分割、サイズ変更、隣接ペイン交換、状態保存/復元、テンプレート作成に絞っています。
+`pudding` は、最低限の操作に絞ったペイン・マルチプレクサです。
 
-## 機能
 - 画面分割（縦/横）
 - サイズ変更（分割線の移動）
-- 縦幅が同じで隣接するペインの交換
-- 横幅が同じで隣接するペインの交換
+- 隣接ペイン交換（縦方向/横方向）
 - 状態保存 / 復元
-- AAミニチュアによるテンプレート作成
-- ペインは `bite`、分割線は `spoon` と呼称
+- AAミニチュアによるテンプレート編集
 
-## インストール（開発用）
-Rust が必要です。
+## まず5分で使う
 
+### 1. 前提
+- Rust と Cargo が使えること
+- macOS / Linux で動作確認済み
+
+### 2. ビルド
 ```bash
-cargo build -p pudding
+cargo build -p pudding --release
 ```
 
-## pnpm/bun での利用（ローカル）
-```bash
-pnpm add -g ./packages/npm
-bun add -g ./packages/npm
-```
-
-`pudding` コマンドは次の順で実行バイナリを探索します。
-- `PUDDING_BIN_PATH` で指定した**絶対パス**
-- `CARGO_TARGET_DIR/release/pudding`
-- ワークスペース配下の `target/release/pudding`
-
-新方針:
-- `PUDDING_BIN_PATH` が相対パスの場合は起動せず明示的にエラー終了します。
-- `cwd`（カレントディレクトリ）配下の探索は行いません。
-
-見つからない場合は、`cargo build -p pudding --release` を実行してください。
-
-配布導線のセルフチェック:
-```bash
-pnpm --dir packages/npm run verify:distribution
-bun run --cwd packages/npm verify:distribution
-```
-
-### 権限ハードニング方針（npm ランチャー）
-- 実行対象は通常ファイルかつ実行可能ビットがあるもののみ許可します。
-- シンボリックリンクや world-writable なバイナリは拒否し、fail-closed で終了します。
-
-## 使い方
-### テンプレート編集
+### 3. テンプレートを作る
 ```bash
 cargo run -p pudding -- template edit --name default
 ```
 
-- 矢印キーでカーソル移動
-- `v` で縦分割、`h` で横分割
-- `n` でペイン名、`c` で初期コマンドを設定
-- `s` で保存、`q` で終了
+テンプレートエディタの基本キー:
+- 矢印キー: カーソル移動
+- `v`: 縦分割
+- `h`: 横分割
+- `n`: ペイン名編集
+- `c`: 初期コマンド編集
+- `s`: 保存
+- `q`: 終了
 
-### テンプレート適用
+### 4. 実行する
 ```bash
 cargo run -p pudding -- run --template default
 ```
 
-## 設定
-`~/.config/pudding/config.json`
+`ghostty` / `cmux` 上でも通常のTUIアプリとして起動できます。
+
+## コマンド一覧
+
+```bash
+pudding --help
+```
+
+主なサブコマンド:
+- `pudding run --template <name>`: テンプレートで起動
+- `pudding template edit --name <name>`: テンプレート編集
+- `pudding template apply --name <name>`: テンプレート適用で起動
+
+## ランタイムの基本キー（デフォルト）
+
+- `v` / `h`: 縦分割 / 横分割
+- `H` / `L` / `K` / `J`: リサイズ（左 / 右 / 上 / 下）
+- `S` / `s`: 隣接交換（縦方向 / 横方向）
+- `Ctrl+S`: 現在状態を保存
+- `Ctrl+R`: 保存状態を復元
+- `Tab`: フォーカス移動
+- `Ctrl+C`: 終了
+
+## 設定ファイル
+
+場所: `~/.config/pudding/config.json`
 
 ```json
 {
@@ -84,9 +85,47 @@ cargo run -p pudding -- run --template default
 }
 ```
 
-## テンプレート/状態の保存先
+## 保存先
+
 - テンプレート: `~/.config/pudding/templates/*.json`
 - 状態: `~/.config/pudding/states/*.json`
 
+テンプレート名/保存名の制約:
+- 使用可能文字: `A-Z a-z 0-9 _ -`
+- 文字数: 1〜64
+
+## pnpm / bun でのローカル利用
+
+```bash
+pnpm add -g ./packages/npm
+bun add -g ./packages/npm
+```
+
+npm ラッパーは次の順で実行バイナリを探索します:
+- `PUDDING_BIN_PATH`（絶対パスのみ許可）
+- `CARGO_TARGET_DIR/release/pudding`
+- ワークスペース配下の `target/release/pudding`
+
+見つからない場合:
+```bash
+cargo build -p pudding --release
+```
+
+配布導線のセルフチェック:
+```bash
+pnpm --dir packages/npm run verify:distribution
+bun run --cwd packages/npm verify:distribution
+```
+
+## トラブルシュート
+
+- `invalid config file` が出る:
+  - `~/.config/pudding/config.json` のJSONが壊れています。修正するか削除して再生成してください。
+- テンプレート読み込みエラーが出る:
+  - 名前制約違反、ID重複、`ratio` 範囲外（0と1を含まない）を確認してください。
+- npm ラッパーで起動できない:
+  - `PUDDING_BIN_PATH` が相対パスだと失敗します。絶対パスを指定してください。
+
 ## ライセンス
+
 MIT
