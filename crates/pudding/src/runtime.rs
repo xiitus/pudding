@@ -33,6 +33,20 @@ use crate::{
     template::{load_state, save_state},
 };
 
+#[path = "runtime_centered_rect.rs"]
+mod runtime_centered_rect;
+#[path = "runtime_key_to_bytes.rs"]
+mod runtime_key_to_bytes;
+#[path = "runtime_main_area.rs"]
+mod runtime_main_area;
+#[path = "runtime_terminal_size.rs"]
+mod runtime_terminal_size;
+
+use runtime_centered_rect::centered_rect;
+use runtime_key_to_bytes::key_to_bytes;
+use runtime_main_area::main_area;
+use runtime_terminal_size::terminal_size;
+
 const OUTPUT_LIMIT: usize = 2000;
 
 struct PaneProcess {
@@ -509,58 +523,4 @@ impl RuntimeApp {
             }
         }
     }
-}
-
-fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
-    match key.code {
-        KeyCode::Char(c) => Some(vec![c as u8]),
-        KeyCode::Enter => Some(vec![b'\r']),
-        KeyCode::Backspace => Some(vec![0x7f]),
-        KeyCode::Tab => Some(vec![b'\t']),
-        KeyCode::Esc => Some(vec![0x1b]),
-        KeyCode::Left => Some(b"\x1b[D".to_vec()),
-        KeyCode::Right => Some(b"\x1b[C".to_vec()),
-        KeyCode::Up => Some(b"\x1b[A".to_vec()),
-        KeyCode::Down => Some(b"\x1b[B".to_vec()),
-        _ => None,
-    }
-}
-
-fn terminal_size() -> ratatui::layout::Rect {
-    let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
-    ratatui::layout::Rect {
-        x: 0,
-        y: 0,
-        width: cols,
-        height: rows,
-    }
-}
-
-fn main_area(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(2)])
-        .split(area);
-    chunks[0]
-}
-
-fn centered_rect(width: u16, height: u16, area: ratatui::layout::Rect) -> ratatui::layout::Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length((area.height.saturating_sub(height)) / 2),
-            Constraint::Length(height),
-            Constraint::Min(0),
-        ])
-        .split(area);
-    let vertical = popup_layout[1];
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length((vertical.width.saturating_sub(width)) / 2),
-            Constraint::Length(width),
-            Constraint::Min(0),
-        ])
-        .split(vertical);
-    horizontal[1]
 }

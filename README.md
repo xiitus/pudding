@@ -24,6 +24,14 @@ pnpm add -g ./packages/npm
 bun add -g ./packages/npm
 ```
 
+`pudding` コマンドは次の順で実行バイナリを探索します。
+- `PUDDING_BIN_PATH` で指定したパス
+- `CARGO_TARGET_DIR/release/pudding`
+- ワークスペース配下の `target/release/pudding`
+- カレントディレクトリ配下の `target/release/pudding`
+
+見つからない場合は、`cargo build -p pudding --release` を実行してください。
+
 ## 使い方
 ### テンプレート編集
 ```bash

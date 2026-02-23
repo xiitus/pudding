@@ -138,4 +138,140 @@ mod tests {
         };
         assert!(validate_template(&template).is_err());
     }
+
+    #[test]
+    fn reject_duplicate_node_id() {
+        let template = Template {
+            name: "ok".to_string(),
+            layout: Node::Spoon {
+                id: 1,
+                orientation: Orientation::Vertical,
+                ratio: 0.5,
+                first: Box::new(Node::Bite {
+                    id: 2,
+                    name: "a".to_string(),
+                    command: "bash".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 2,
+                    name: "b".to_string(),
+                    command: "bash".to_string(),
+                }),
+            },
+        };
+        assert!(validate_template(&template).is_err());
+    }
+
+    #[test]
+    fn reject_empty_bite_name_and_command() {
+        let with_empty_name = Template {
+            name: "ok".to_string(),
+            layout: Node::Bite {
+                id: 1,
+                name: "   ".to_string(),
+                command: "bash".to_string(),
+            },
+        };
+        assert!(validate_template(&with_empty_name).is_err());
+
+        let with_empty_command = Template {
+            name: "ok".to_string(),
+            layout: Node::Bite {
+                id: 1,
+                name: "valid".to_string(),
+                command: "   ".to_string(),
+            },
+        };
+        assert!(validate_template(&with_empty_command).is_err());
+    }
+
+    #[test]
+    fn reject_invalid_store_name() {
+        assert!(validate_store_name("bad/name").is_err());
+        assert!(validate_store_name("bad name").is_err());
+        assert!(validate_store_name("").is_err());
+    }
+
+    #[test]
+    fn validate_template_ratio_boundaries() {
+        let at_zero = Template {
+            name: "ok".to_string(),
+            layout: Node::Spoon {
+                id: 1,
+                orientation: Orientation::Vertical,
+                ratio: 0.0,
+                first: Box::new(Node::Bite {
+                    id: 2,
+                    name: "a".to_string(),
+                    command: "bash".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 3,
+                    name: "b".to_string(),
+                    command: "bash".to_string(),
+                }),
+            },
+        };
+        assert!(validate_template(&at_zero).is_err());
+
+        let near_zero = Template {
+            name: "ok".to_string(),
+            layout: Node::Spoon {
+                id: 1,
+                orientation: Orientation::Vertical,
+                ratio: 0.0001,
+                first: Box::new(Node::Bite {
+                    id: 2,
+                    name: "a".to_string(),
+                    command: "bash".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 3,
+                    name: "b".to_string(),
+                    command: "bash".to_string(),
+                }),
+            },
+        };
+        assert!(validate_template(&near_zero).is_ok());
+
+        let at_one = Template {
+            name: "ok".to_string(),
+            layout: Node::Spoon {
+                id: 1,
+                orientation: Orientation::Vertical,
+                ratio: 1.0,
+                first: Box::new(Node::Bite {
+                    id: 2,
+                    name: "a".to_string(),
+                    command: "bash".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 3,
+                    name: "b".to_string(),
+                    command: "bash".to_string(),
+                }),
+            },
+        };
+        assert!(validate_template(&at_one).is_err());
+
+        let near_one = Template {
+            name: "ok".to_string(),
+            layout: Node::Spoon {
+                id: 1,
+                orientation: Orientation::Vertical,
+                ratio: 0.9999,
+                first: Box::new(Node::Bite {
+                    id: 2,
+                    name: "a".to_string(),
+                    command: "bash".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 3,
+                    name: "b".to_string(),
+                    command: "bash".to_string(),
+                }),
+            },
+        };
+        assert!(validate_template(&near_one).is_ok());
+    }
 }

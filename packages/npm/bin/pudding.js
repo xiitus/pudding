@@ -4,11 +4,29 @@ const { spawn } = require("child_process");
 const { existsSync } = require("fs");
 const path = require("path");
 
-const root = path.resolve(__dirname, "..", "..", "..");
-const binPath = path.join(root, "crates", "pudding", "target", "release", "pudding");
+const binaryName = process.platform === "win32" ? "pudding.exe" : "pudding";
+const packageRoot = path.resolve(__dirname, "..");
+const workspaceRoot = path.resolve(packageRoot, "..", "..");
+const cargoTargetDir = process.env.CARGO_TARGET_DIR;
 
-if (!existsSync(binPath)) {
-  console.error("puddingのバイナリが見つかりません。先に `cargo build -p pudding --release` を実行してください。");
+const candidates = [
+  process.env.PUDDING_BIN_PATH,
+  cargoTargetDir ? path.join(cargoTargetDir, "release", binaryName) : null,
+  path.join(workspaceRoot, "target", "release", binaryName),
+  path.join(workspaceRoot, "crates", "pudding", "target", "release", binaryName),
+  path.join(process.cwd(), "target", "release", binaryName),
+  path.join(process.cwd(), "crates", "pudding", "target", "release", binaryName),
+].filter(Boolean);
+
+const uniqueCandidates = [...new Set(candidates)];
+const binPath = uniqueCandidates.find((candidate) => existsSync(candidate));
+
+if (!binPath) {
+  console.error("puddingのバイナリが見つかりません。`cargo build -p pudding --release` を実行するか `PUDDING_BIN_PATH` を指定してください。");
+  console.error("探索したパス:");
+  for (const candidate of uniqueCandidates) {
+    console.error(`- ${candidate}`);
+  }
   process.exit(1);
 }
 

@@ -318,7 +318,7 @@ fn point_in_rect(rect: Rect, x: u16, y: u16) -> bool {
 mod tests {
     use ratatui::layout::Rect;
 
-    use crate::layout::split_rect;
+    use crate::layout::{clamp_ratio, split_rect};
     use crate::model::Orientation;
 
     #[test]
@@ -345,5 +345,32 @@ mod tests {
         let (top, bottom) = split_rect(rect, Orientation::Horizontal, 0.5);
         assert_eq!(top.height, 1);
         assert_eq!(bottom.height, 0);
+    }
+
+    #[test]
+    fn clamp_ratio_bounds() {
+        assert_eq!(clamp_ratio(0.0), 0.1);
+        assert_eq!(clamp_ratio(0.1), 0.1);
+        assert_eq!(clamp_ratio(0.5), 0.5);
+        assert_eq!(clamp_ratio(0.9), 0.9);
+        assert_eq!(clamp_ratio(1.0), 0.9);
+    }
+
+    #[test]
+    fn split_rect_uses_clamped_ratio_bounds() {
+        let rect = Rect {
+            x: 0,
+            y: 0,
+            width: 10,
+            height: 10,
+        };
+
+        let (low_left, low_right) = split_rect(rect, Orientation::Vertical, 0.0);
+        assert_eq!(low_left.width, 1);
+        assert_eq!(low_right.width, 9);
+
+        let (high_left, high_right) = split_rect(rect, Orientation::Vertical, 1.0);
+        assert_eq!(high_left.width, 9);
+        assert_eq!(high_right.width, 1);
     }
 }

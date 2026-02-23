@@ -15,6 +15,10 @@ use ratatui::{
     Terminal,
 };
 
+mod editor_area;
+
+use self::editor_area::{centered_rect, main_area};
+
 use crate::{
     layout::{find_bite_at, layout_rects, next_id, split_bite},
     model::{Node, Orientation, Template},
@@ -317,33 +321,4 @@ impl EditorApp {
             }
         }
     }
-}
-
-fn main_area(area: Rect) -> Rect {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(2)])
-        .split(area);
-    chunks[0]
-}
-
-fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length((area.height.saturating_sub(height)) / 2),
-            Constraint::Length(height),
-            Constraint::Min(0),
-        ])
-        .split(area);
-    let vertical = popup_layout[1];
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length((vertical.width.saturating_sub(width)) / 2),
-            Constraint::Length(width),
-            Constraint::Min(0),
-        ])
-        .split(vertical);
-    horizontal[1]
 }
