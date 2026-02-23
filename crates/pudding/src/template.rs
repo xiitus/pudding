@@ -10,6 +10,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::layout::{MAX_RATIO, MIN_RATIO};
 use crate::model::{default_template, Node, Template};
 use crate::paths::{states_dir, templates_dir};
 
@@ -106,8 +107,12 @@ fn validate_node(node: &Node, ids: &mut HashSet<u64>) -> Result<()> {
             second,
             ..
         } => {
-            if !(*ratio > 0.0 && *ratio < 1.0) {
-                bail!("spoon ratio must be in (0,1)");
+            if !(*ratio >= MIN_RATIO && *ratio <= MAX_RATIO) {
+                bail!(
+                    "spoon ratio must be in [{min:.1},{max:.1}]",
+                    min = MIN_RATIO,
+                    max = MAX_RATIO
+                );
             }
             validate_node(first, ids)?;
             validate_node(second, ids)
@@ -137,6 +142,7 @@ fn write_private_file(path: &Path, content: &str) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::layout::{MAX_RATIO, MIN_RATIO};
     use crate::model::{Node, Orientation, Template};
     use crate::template::{validate_store_name, validate_template};
 
@@ -218,6 +224,7 @@ mod tests {
     #[test]
     fn reject_invalid_store_name() {
         assert!(validate_store_name("bad/name").is_err());
+        assert!(validate_store_name("bad.name").is_err());
         assert!(validate_store_name("bad name").is_err());
         assert!(validate_store_name("").is_err());
     }
@@ -231,13 +238,13 @@ mod tests {
     }
 
     #[test]
-    fn reject_template_ratio_outside_open_interval() {
+    fn reject_template_ratio_outside_clamp_interval() {
         let below_zero = Template {
             name: "ok".to_string(),
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: -0.01,
+                ratio: MIN_RATIO - 0.01,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -257,7 +264,7 @@ mod tests {
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: 1.01,
+                ratio: MAX_RATIO + 0.01,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -298,12 +305,12 @@ mod tests {
 
     #[test]
     fn validate_template_ratio_boundaries() {
-        let at_zero = Template {
+        let below_min = Template {
             name: "ok".to_string(),
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: 0.0,
+                ratio: MIN_RATIO - 0.001,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -316,14 +323,14 @@ mod tests {
                 }),
             },
         };
-        assert!(validate_template(&at_zero).is_err());
+        assert!(validate_template(&below_min).is_err());
 
-        let near_zero = Template {
+        let at_min = Template {
             name: "ok".to_string(),
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: 0.0001,
+                ratio: MIN_RATIO,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -336,14 +343,14 @@ mod tests {
                 }),
             },
         };
-        assert!(validate_template(&near_zero).is_ok());
+        assert!(validate_template(&at_min).is_ok());
 
-        let at_one = Template {
+        let above_max = Template {
             name: "ok".to_string(),
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: 1.0,
+                ratio: MAX_RATIO + 0.001,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -356,14 +363,14 @@ mod tests {
                 }),
             },
         };
-        assert!(validate_template(&at_one).is_err());
+        assert!(validate_template(&above_max).is_err());
 
-        let near_one = Template {
+        let at_max = Template {
             name: "ok".to_string(),
             layout: Node::Spoon {
                 id: 1,
                 orientation: Orientation::Vertical,
-                ratio: 0.9999,
+                ratio: MAX_RATIO,
                 first: Box::new(Node::Bite {
                     id: 2,
                     name: "a".to_string(),
@@ -376,7 +383,7 @@ mod tests {
                 }),
             },
         };
-        assert!(validate_template(&near_one).is_ok());
+        assert!(validate_template(&at_max).is_ok());
     }
 
     #[test]

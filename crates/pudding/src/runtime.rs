@@ -312,9 +312,7 @@ impl RuntimeApp {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
-        if matches!(key.code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'c'))
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
+        if self.is_quit_key(key) {
             return Ok(true);
         }
 
@@ -340,6 +338,12 @@ impl RuntimeApp {
         }
 
         Ok(false)
+    }
+
+    fn is_quit_key(&self, key: KeyEvent) -> bool {
+        self.actions
+            .iter()
+            .any(|(binding, action)| *action == Action::Quit && binding.matches(key))
     }
 
     fn handle_action(&mut self, action: Action) -> bool {

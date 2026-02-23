@@ -13,7 +13,8 @@ const postinstallScript = path.join(
   "scripts",
   "postinstall.js",
 );
-const puddingBin = path.join(repoRoot, "target", "release", "pudding");
+const puddingBinName = process.platform === "win32" ? "pudding.exe" : "pudding";
+const puddingBin = path.join(repoRoot, "target", "release", puddingBinName);
 
 if (!existsSync(puddingBin)) {
   console.error(

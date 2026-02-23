@@ -2,8 +2,8 @@ use ratatui::layout::Rect;
 
 use crate::model::{Node, Orientation};
 
-const MIN_RATIO: f32 = 0.1;
-const MAX_RATIO: f32 = 0.9;
+pub const MIN_RATIO: f32 = 0.1;
+pub const MAX_RATIO: f32 = 0.9;
 
 pub fn next_id(node: &Node) -> u64 {
     let mut max_id = 0;
