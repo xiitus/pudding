@@ -49,6 +49,7 @@ use runtime_terminal_size::terminal_size;
 
 const OUTPUT_LIMIT: usize = 2000;
 const PENDING_CHAR_LIMIT: usize = 8192;
+const RESIZE_STEP_RATIO: f32 = 0.20;
 
 struct PaneProcess {
     master: Box<dyn portable_pty::MasterPty + Send>,
@@ -348,7 +349,7 @@ impl RuntimeApp {
                     &mut self.template.layout,
                     self.active_id,
                     Orientation::Vertical,
-                    -0.05,
+                    -RESIZE_STEP_RATIO,
                 );
                 self.resize_all(terminal_size());
             }
@@ -357,7 +358,7 @@ impl RuntimeApp {
                     &mut self.template.layout,
                     self.active_id,
                     Orientation::Vertical,
-                    0.05,
+                    RESIZE_STEP_RATIO,
                 );
                 self.resize_all(terminal_size());
             }
@@ -366,7 +367,7 @@ impl RuntimeApp {
                     &mut self.template.layout,
                     self.active_id,
                     Orientation::Horizontal,
-                    -0.05,
+                    -RESIZE_STEP_RATIO,
                 );
                 self.resize_all(terminal_size());
             }
@@ -375,7 +376,7 @@ impl RuntimeApp {
                     &mut self.template.layout,
                     self.active_id,
                     Orientation::Horizontal,
-                    0.05,
+                    RESIZE_STEP_RATIO,
                 );
                 self.resize_all(terminal_size());
             }
