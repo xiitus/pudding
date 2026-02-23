@@ -33,12 +33,24 @@ use crate::{
     template::{load_state, save_state},
 };
 
+#[path = "runtime_centered_rect.rs"]
+mod runtime_centered_rect;
+#[path = "runtime_key_to_bytes.rs"]
+mod runtime_key_to_bytes;
+#[path = "runtime_main_area.rs"]
+mod runtime_main_area;
+#[path = "runtime_terminal_size.rs"]
+mod runtime_terminal_size;
+
+use runtime_centered_rect::centered_rect;
+use runtime_key_to_bytes::key_to_bytes;
+use runtime_main_area::main_area;
+use runtime_terminal_size::terminal_size;
+
 const OUTPUT_LIMIT: usize = 2000;
+const PENDING_CHAR_LIMIT: usize = 8192;
 
 struct PaneProcess {
-    id: u64,
-    name: String,
-    command: String,
     master: Box<dyn portable_pty::MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     _child: Box<dyn portable_pty::Child + Send>,
@@ -46,7 +58,7 @@ struct PaneProcess {
 }
 
 impl PaneProcess {
-    fn spawn(id: u64, name: String, command: String, size: PtySize) -> Result<Self> {
+    fn spawn(command: String, size: PtySize) -> Result<Self> {
         let pty_system = portable_pty::native_pty_system();
         let pair = pty_system.openpty(size)?;
         let mut cmd = CommandBuilder::new(&command);
@@ -77,6 +89,16 @@ impl PaneProcess {
                         let mut lines: Vec<&str> = combined.split('\n').collect();
                         let last = lines.pop().unwrap_or("");
                         pending = last.to_string();
+                        if pending.chars().count() > PENDING_CHAR_LIMIT {
+                            pending = pending
+                                .chars()
+                                .rev()
+                                .take(PENDING_CHAR_LIMIT)
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .rev()
+                                .collect();
+                        }
                         let mut guard = output_clone.lock().unwrap();
                         for line in lines {
                             guard.push_back(line.to_string());
@@ -91,9 +113,6 @@ impl PaneProcess {
         });
 
         Ok(Self {
-            id,
-            name,
-            command,
             master: pair.master,
             writer,
             _child: child,
@@ -168,14 +187,16 @@ impl RuntimeApp {
         layout_rects(&self.template.layout, main, &mut rects);
 
         for (id, rect) in rects {
-            if let Some(Node::Bite { name, command, .. }) = crate::layout::find_bite(&self.template.layout, id) {
+            if let Some(Node::Bite { command, .. }) =
+                crate::layout::find_bite(&self.template.layout, id)
+            {
                 let pty_size = PtySize {
                     rows: rect.height.saturating_sub(2),
                     cols: rect.width.saturating_sub(2),
                     pixel_width: 0,
                     pixel_height: 0,
                 };
-                let pane = PaneProcess::spawn(id, name.clone(), command.clone(), pty_size)?;
+                let pane = PaneProcess::spawn(command.clone(), pty_size)?;
                 self.panes.insert(id, pane);
             }
         }
@@ -256,7 +277,9 @@ impl RuntimeApp {
         }
 
         let mut status_line = vec![Span::raw("[pudding] ")];
-        if let Some(Node::Bite { name, .. }) = crate::layout::find_bite(&self.template.layout, self.active_id) {
+        if let Some(Node::Bite { name, .. }) =
+            crate::layout::find_bite(&self.template.layout, self.active_id)
+        {
             status_line.push(Span::raw(format!("active: {}  ", name)));
         }
         if !self.status.is_empty() {
@@ -271,8 +294,19 @@ impl RuntimeApp {
             let area = centered_rect(80, 3, area);
             let block = Block::default().borders(Borders::ALL).title("Input");
             f.render_widget(block, area);
-            f.render_widget(Paragraph::new(line), ratatui::layout::Rect { x: area.x + 1, y: area.y + 1, width: area.width - 2, height: 1 });
-            f.set_cursor(area.x + 1 + label.len() as u16 + prompt.buffer.len() as u16, area.y + 1);
+            f.render_widget(
+                Paragraph::new(line),
+                ratatui::layout::Rect {
+                    x: area.x + 1,
+                    y: area.y + 1,
+                    width: area.width - 2,
+                    height: 1,
+                },
+            );
+            f.set_cursor(
+                area.x + 1 + label.len() as u16 + prompt.buffer.len() as u16,
+                area.y + 1,
+            );
         }
     }
 
@@ -310,32 +344,68 @@ impl RuntimeApp {
                 self.split_active(Orientation::Horizontal);
             }
             Action::ResizeLeft => {
-                let _ = resize_from_bite(&mut self.template.layout, self.active_id, Orientation::Vertical, -0.05);
+                let _ = resize_from_bite(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Vertical,
+                    -0.05,
+                );
                 self.resize_all(terminal_size());
             }
             Action::ResizeRight => {
-                let _ = resize_from_bite(&mut self.template.layout, self.active_id, Orientation::Vertical, 0.05);
+                let _ = resize_from_bite(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Vertical,
+                    0.05,
+                );
                 self.resize_all(terminal_size());
             }
             Action::ResizeUp => {
-                let _ = resize_from_bite(&mut self.template.layout, self.active_id, Orientation::Horizontal, -0.05);
+                let _ = resize_from_bite(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Horizontal,
+                    -0.05,
+                );
                 self.resize_all(terminal_size());
             }
             Action::ResizeDown => {
-                let _ = resize_from_bite(&mut self.template.layout, self.active_id, Orientation::Horizontal, 0.05);
+                let _ = resize_from_bite(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Horizontal,
+                    0.05,
+                );
                 self.resize_all(terminal_size());
             }
             Action::SwapVertical => {
-                let _ = swap_adjacent_bites(&mut self.template.layout, self.active_id, Orientation::Vertical);
+                let _ = swap_adjacent_bites(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Vertical,
+                );
             }
             Action::SwapHorizontal => {
-                let _ = swap_adjacent_bites(&mut self.template.layout, self.active_id, Orientation::Horizontal);
+                let _ = swap_adjacent_bites(
+                    &mut self.template.layout,
+                    self.active_id,
+                    Orientation::Horizontal,
+                );
             }
             Action::SaveState => {
-                self.prompt = Some(InputPrompt { label: "保存名".to_string(), buffer: String::new(), mode: PromptMode::Save });
+                self.prompt = Some(InputPrompt {
+                    label: "保存名".to_string(),
+                    buffer: String::new(),
+                    mode: PromptMode::Save,
+                });
             }
             Action::RestoreState => {
-                self.prompt = Some(InputPrompt { label: "復元名".to_string(), buffer: String::new(), mode: PromptMode::Restore });
+                self.prompt = Some(InputPrompt {
+                    label: "復元名".to_string(),
+                    buffer: String::new(),
+                    mode: PromptMode::Restore,
+                });
             }
             Action::FocusNext => {
                 self.focus_next();
@@ -352,8 +422,14 @@ impl RuntimeApp {
                 match prompt.mode {
                     PromptMode::Save => {
                         if !name.is_empty() {
-                            let _ = save_state(&name, &self.template);
-                            self.status = format!("保存しました: {}", name);
+                            match save_state(&name, &self.template) {
+                                Ok(_) => {
+                                    self.status = format!("保存しました: {}", name);
+                                }
+                                Err(err) => {
+                                    self.status = format!("保存に失敗: {err}");
+                                }
+                            }
                         }
                     }
                     PromptMode::Restore => {
@@ -362,11 +438,17 @@ impl RuntimeApp {
                                 Ok(tpl) => {
                                     self.template = tpl;
                                     self.panes.clear();
-                                    let _ = self.spawn_all();
-                                    self.status = format!("復元しました: {}", name);
+                                    match self.spawn_all() {
+                                        Ok(_) => {
+                                            self.status = format!("復元しました: {}", name);
+                                        }
+                                        Err(err) => {
+                                            self.status = format!("復元に失敗: {err}");
+                                        }
+                                    }
                                 }
-                                Err(_) => {
-                                    self.status = format!("復元に失敗: {}", name);
+                                Err(err) => {
+                                    self.status = format!("復元に失敗: {err}");
                                 }
                             }
                         }
@@ -407,10 +489,10 @@ impl RuntimeApp {
             let mut rects = Vec::new();
             layout_rects(&self.template.layout, size, &mut rects);
             if let Some((_, rect)) = rects.iter().find(|(id, _)| *id == new_id) {
-                if let Some(Node::Bite { name, command, .. }) = crate::layout::find_bite(&self.template.layout, new_id) {
+                if let Some(Node::Bite { command, .. }) =
+                    crate::layout::find_bite(&self.template.layout, new_id)
+                {
                     let pane = PaneProcess::spawn(
-                        new_id,
-                        name.clone(),
                         command.clone(),
                         PtySize {
                             rows: rect.height.saturating_sub(2),
@@ -452,53 +534,4 @@ impl RuntimeApp {
             }
         }
     }
-}
-
-fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
-    match key.code {
-        KeyCode::Char(c) => Some(vec![c as u8]),
-        KeyCode::Enter => Some(vec![b'\r']),
-        KeyCode::Backspace => Some(vec![0x7f]),
-        KeyCode::Tab => Some(vec![b'\t']),
-        KeyCode::Esc => Some(vec![0x1b]),
-        KeyCode::Left => Some(b"\x1b[D".to_vec()),
-        KeyCode::Right => Some(b"\x1b[C".to_vec()),
-        KeyCode::Up => Some(b"\x1b[A".to_vec()),
-        KeyCode::Down => Some(b"\x1b[B".to_vec()),
-        _ => None,
-    }
-}
-
-fn terminal_size() -> ratatui::layout::Rect {
-    let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
-    ratatui::layout::Rect { x: 0, y: 0, width: cols, height: rows }
-}
-
-fn main_area(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(2)])
-        .split(area);
-    chunks[0]
-}
-
-fn centered_rect(width: u16, height: u16, area: ratatui::layout::Rect) -> ratatui::layout::Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length((area.height.saturating_sub(height)) / 2),
-            Constraint::Length(height),
-            Constraint::Min(0),
-        ])
-        .split(area);
-    let vertical = popup_layout[1];
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length((vertical.width.saturating_sub(width)) / 2),
-            Constraint::Length(width),
-            Constraint::Min(0),
-        ])
-        .split(vertical);
-    horizontal[1]
 }

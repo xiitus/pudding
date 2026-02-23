@@ -37,10 +37,6 @@ impl Node {
             Node::Spoon { id, .. } => *id,
         }
     }
-
-    pub fn is_bite(&self) -> bool {
-        matches!(self, Node::Bite { .. })
-    }
 }
 
 pub fn default_template() -> Template {

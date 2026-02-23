@@ -15,6 +15,10 @@ use ratatui::{
     Terminal,
 };
 
+mod editor_area;
+
+use self::editor_area::{centered_rect, main_area};
+
 use crate::{
     layout::{find_bite_at, layout_rects, next_id, split_bite},
     model::{Node, Orientation, Template},
@@ -70,7 +74,10 @@ impl EditorApp {
         res
     }
 
-    fn loop_ui(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<Template> {
+    fn loop_ui(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<Template> {
         loop {
             terminal.draw(|f| self.draw(f))?;
 
@@ -142,8 +149,19 @@ impl EditorApp {
             let block = Block::default().borders(Borders::ALL).title("Input");
             let area = centered_rect(80, 3, area);
             f.render_widget(block, area);
-            f.render_widget(Paragraph::new(line), Rect { x: area.x + 1, y: area.y + 1, width: area.width - 2, height: 1 });
-            f.set_cursor(area.x + 1 + prompt.len() as u16 + input.buffer.len() as u16, area.y + 1);
+            f.render_widget(
+                Paragraph::new(line),
+                Rect {
+                    x: area.x + 1,
+                    y: area.y + 1,
+                    width: area.width - 2,
+                    height: 1,
+                },
+            );
+            f.set_cursor(
+                area.x + 1 + prompt.len() as u16 + input.buffer.len() as u16,
+                area.y + 1,
+            );
         }
     }
 
@@ -162,17 +180,21 @@ impl EditorApp {
             KeyCode::Char('v') => self.split_at_cursor(main, Orientation::Vertical),
             KeyCode::Char('h') => self.split_at_cursor(main, Orientation::Horizontal),
             KeyCode::Char('n') => {
-                self.input = Some(InputMode { kind: InputKind::Name, buffer: String::new() });
+                self.input = Some(InputMode {
+                    kind: InputKind::Name,
+                    buffer: String::new(),
+                });
             }
             KeyCode::Char('c') => {
-                self.input = Some(InputMode { kind: InputKind::Command, buffer: String::new() });
+                self.input = Some(InputMode {
+                    kind: InputKind::Command,
+                    buffer: String::new(),
+                });
             }
-            KeyCode::Char('s') => {
-                match save_template(&self.template) {
-                    Ok(_) => self.message = "テンプレートを保存しました".to_string(),
-                    Err(_) => self.message = "保存に失敗しました".to_string(),
-                }
-            }
+            KeyCode::Char('s') => match save_template(&self.template) {
+                Ok(_) => self.message = "テンプレートを保存しました".to_string(),
+                Err(_) => self.message = "保存に失敗しました".to_string(),
+            },
             KeyCode::Left => {
                 if self.cursor_x > main.x {
                     self.cursor_x -= 1;
@@ -228,14 +250,18 @@ impl EditorApp {
     fn apply_input(&mut self, input: &InputMode) {
         match input.kind {
             InputKind::Name => {
-                if let Some(Node::Bite { name, .. }) = crate::layout::find_bite_mut(&mut self.template.layout, self.selected_id) {
+                if let Some(Node::Bite { name, .. }) =
+                    crate::layout::find_bite_mut(&mut self.template.layout, self.selected_id)
+                {
                     if !input.buffer.is_empty() {
                         *name = input.buffer.clone();
                     }
                 }
             }
             InputKind::Command => {
-                if let Some(Node::Bite { command, .. }) = crate::layout::find_bite_mut(&mut self.template.layout, self.selected_id) {
+                if let Some(Node::Bite { command, .. }) =
+                    crate::layout::find_bite_mut(&mut self.template.layout, self.selected_id)
+                {
                     if !input.buffer.is_empty() {
                         *command = input.buffer.clone();
                     }
@@ -251,53 +277,48 @@ impl EditorApp {
             layout_rects(&self.template.layout, main, &mut rects);
             rects
         };
-        let rect = rects.into_iter().find(|(id, _)| *id == target_id).map(|(_, r)| r);
+        let rect = rects
+            .into_iter()
+            .find(|(id, _)| *id == target_id)
+            .map(|(_, r)| r);
         if let Some(rect) = rect {
             let ratio = match orientation {
                 Orientation::Vertical => {
                     let dx = self.cursor_x.saturating_sub(rect.x) as f32;
-                    if rect.width == 0 { 0.5 } else { dx / rect.width as f32 }
+                    if rect.width == 0 {
+                        0.5
+                    } else {
+                        dx / rect.width as f32
+                    }
                 }
                 Orientation::Horizontal => {
                     let dy = self.cursor_y.saturating_sub(rect.y) as f32;
-                    if rect.height == 0 { 0.5 } else { dy / rect.height as f32 }
+                    if rect.height == 0 {
+                        0.5
+                    } else {
+                        dy / rect.height as f32
+                    }
                 }
             };
             let new_id = next_id(&self.template.layout);
-            let default_command = crate::config::Config::load().default_command;
-            let did = split_bite(&mut self.template.layout, target_id, orientation, ratio, new_id, &default_command);
+            let default_command = match crate::config::Config::load() {
+                Ok(cfg) => cfg.default_command,
+                Err(err) => {
+                    self.message = format!("設定読込に失敗: {err}");
+                    return;
+                }
+            };
+            let did = split_bite(
+                &mut self.template.layout,
+                target_id,
+                orientation,
+                ratio,
+                new_id,
+                &default_command,
+            );
             if did {
                 self.message = "分割しました".to_string();
             }
         }
     }
-}
-
-fn main_area(area: Rect) -> Rect {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(2)])
-        .split(area);
-    chunks[0]
-}
-
-fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length((area.height.saturating_sub(height)) / 2),
-            Constraint::Length(height),
-            Constraint::Min(0),
-        ])
-        .split(area);
-    let vertical = popup_layout[1];
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length((vertical.width.saturating_sub(width)) / 2),
-            Constraint::Length(width),
-            Constraint::Min(0),
-        ])
-        .split(vertical);
-    horizontal[1]
 }

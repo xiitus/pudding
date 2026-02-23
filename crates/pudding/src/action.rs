@@ -35,7 +35,12 @@ pub fn actions_from_config(map: &HashMap<String, String>) -> HashMap<KeyBinding,
     out
 }
 
-fn insert_action(map: &HashMap<String, String>, out: &mut HashMap<KeyBinding, Action>, key: &str, action: Action) {
+fn insert_action(
+    map: &HashMap<String, String>,
+    out: &mut HashMap<KeyBinding, Action>,
+    key: &str,
+    action: Action,
+) {
     if let Some(value) = map.get(key) {
         if let Some(binding) = parse_keybinding(value) {
             out.insert(binding, action);
