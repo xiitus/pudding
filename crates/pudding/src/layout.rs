@@ -23,14 +23,6 @@ pub fn walk<F: FnMut(&Node)>(node: &Node, f: &mut F) {
     }
 }
 
-pub fn walk_mut<F: FnMut(&mut Node)>(node: &mut Node, f: &mut F) {
-    f(node);
-    if let Node::Spoon { first, second, .. } = node {
-        walk_mut(first, f);
-        walk_mut(second, f);
-    }
-}
-
 pub fn collect_bites(node: &Node, out: &mut Vec<u64>) {
     match node {
         Node::Bite { id, .. } => out.push(*id),
@@ -65,7 +57,14 @@ pub fn find_bite_mut(node: &mut Node, target_id: u64) -> Option<&mut Node> {
     }
 }
 
-pub fn split_bite(node: &mut Node, target_id: u64, orientation: Orientation, ratio: f32, new_id: u64, default_command: &str) -> bool {
+pub fn split_bite(
+    node: &mut Node,
+    target_id: u64,
+    orientation: Orientation,
+    ratio: f32,
+    new_id: u64,
+    default_command: &str,
+) -> bool {
     match node {
         Node::Bite { id, name, command } if *id == target_id => {
             let original = Node::Bite {
@@ -89,19 +88,48 @@ pub fn split_bite(node: &mut Node, target_id: u64, orientation: Orientation, rat
         }
         Node::Bite { .. } => false,
         Node::Spoon { first, second, .. } => {
-            split_bite(first, target_id, orientation, ratio, new_id, default_command)
-                || split_bite(second, target_id, orientation, ratio, new_id, default_command)
+            split_bite(
+                first,
+                target_id,
+                orientation,
+                ratio,
+                new_id,
+                default_command,
+            ) || split_bite(
+                second,
+                target_id,
+                orientation,
+                ratio,
+                new_id,
+                default_command,
+            )
         }
     }
 }
 
-pub fn resize_from_bite(node: &mut Node, target_id: u64, orientation: Orientation, delta: f32) -> bool {
+pub fn resize_from_bite(
+    node: &mut Node,
+    target_id: u64,
+    orientation: Orientation,
+    delta: f32,
+) -> bool {
     resize_from_bite_inner(node, target_id, orientation, delta)
 }
 
-fn resize_from_bite_inner(node: &mut Node, target_id: u64, orientation: Orientation, delta: f32) -> bool {
+fn resize_from_bite_inner(
+    node: &mut Node,
+    target_id: u64,
+    orientation: Orientation,
+    delta: f32,
+) -> bool {
     match node {
-        Node::Spoon { orientation: o, ratio, first, second, .. } if *o == orientation => {
+        Node::Spoon {
+            orientation: o,
+            ratio,
+            first,
+            second,
+            ..
+        } if *o == orientation => {
             let in_first = contains_bite(first, target_id);
             let in_second = contains_bite(second, target_id);
             if in_first || in_second {
@@ -121,7 +149,12 @@ fn resize_from_bite_inner(node: &mut Node, target_id: u64, orientation: Orientat
 
 pub fn swap_adjacent_bites(node: &mut Node, target_id: u64, orientation: Orientation) -> bool {
     match node {
-        Node::Spoon { orientation: o, first, second, .. } if *o == orientation => {
+        Node::Spoon {
+            orientation: o,
+            first,
+            second,
+            ..
+        } if *o == orientation => {
             let can_swap = matches!(first.as_ref(), Node::Bite { .. })
                 && matches!(second.as_ref(), Node::Bite { .. });
             if can_swap {
@@ -146,7 +179,13 @@ pub fn swap_adjacent_bites(node: &mut Node, target_id: u64, orientation: Orienta
 pub fn layout_rects(node: &Node, rect: Rect, out: &mut Vec<(u64, Rect)>) {
     match node {
         Node::Bite { id, .. } => out.push((*id, rect)),
-        Node::Spoon { orientation, ratio, first, second, .. } => {
+        Node::Spoon {
+            orientation,
+            ratio,
+            first,
+            second,
+            ..
+        } => {
             let (r1, r2) = split_rect(rect, *orientation, *ratio);
             layout_rects(first, r1, out);
             layout_rects(second, r2, out);
@@ -157,7 +196,13 @@ pub fn layout_rects(node: &Node, rect: Rect, out: &mut Vec<(u64, Rect)>) {
 pub fn find_bite_at(node: &Node, rect: Rect, x: u16, y: u16) -> Option<u64> {
     match node {
         Node::Bite { id, .. } => Some(*id),
-        Node::Spoon { orientation, ratio, first, second, .. } => {
+        Node::Spoon {
+            orientation,
+            ratio,
+            first,
+            second,
+            ..
+        } => {
             let (r1, r2) = split_rect(rect, *orientation, *ratio);
             if point_in_rect(r1, x, y) {
                 find_bite_at(first, r1, x, y)
@@ -171,19 +216,29 @@ pub fn find_bite_at(node: &Node, rect: Rect, x: u16, y: u16) -> Option<u64> {
 }
 
 pub fn clamp_ratio(ratio: f32) -> f32 {
-    if ratio < MIN_RATIO {
-        MIN_RATIO
-    } else if ratio > MAX_RATIO {
-        MAX_RATIO
-    } else {
-        ratio
-    }
+    ratio.clamp(MIN_RATIO, MAX_RATIO)
 }
 
 pub fn split_rect(rect: Rect, orientation: Orientation, ratio: f32) -> (Rect, Rect) {
     let ratio = clamp_ratio(ratio);
     match orientation {
         Orientation::Vertical => {
+            if rect.width <= 1 {
+                return (
+                    Rect {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                    },
+                    Rect {
+                        x: rect.x + rect.width,
+                        y: rect.y,
+                        width: 0,
+                        height: rect.height,
+                    },
+                );
+            }
             let mut w1 = (rect.width as f32 * ratio).round() as u16;
             if w1 < 1 {
                 w1 = 1;
@@ -191,11 +246,37 @@ pub fn split_rect(rect: Rect, orientation: Orientation, ratio: f32) -> (Rect, Re
             if w1 >= rect.width {
                 w1 = rect.width - 1;
             }
-            let r1 = Rect { x: rect.x, y: rect.y, width: w1, height: rect.height };
-            let r2 = Rect { x: rect.x + w1, y: rect.y, width: rect.width - w1, height: rect.height };
+            let r1 = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: w1,
+                height: rect.height,
+            };
+            let r2 = Rect {
+                x: rect.x + w1,
+                y: rect.y,
+                width: rect.width - w1,
+                height: rect.height,
+            };
             (r1, r2)
         }
         Orientation::Horizontal => {
+            if rect.height <= 1 {
+                return (
+                    Rect {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                    },
+                    Rect {
+                        x: rect.x,
+                        y: rect.y + rect.height,
+                        width: rect.width,
+                        height: 0,
+                    },
+                );
+            }
             let mut h1 = (rect.height as f32 * ratio).round() as u16;
             if h1 < 1 {
                 h1 = 1;
@@ -203,8 +284,18 @@ pub fn split_rect(rect: Rect, orientation: Orientation, ratio: f32) -> (Rect, Re
             if h1 >= rect.height {
                 h1 = rect.height - 1;
             }
-            let r1 = Rect { x: rect.x, y: rect.y, width: rect.width, height: h1 };
-            let r2 = Rect { x: rect.x, y: rect.y + h1, width: rect.width, height: rect.height - h1 };
+            let r1 = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: h1,
+            };
+            let r2 = Rect {
+                x: rect.x,
+                y: rect.y + h1,
+                width: rect.width,
+                height: rect.height - h1,
+            };
             (r1, r2)
         }
     }
@@ -213,10 +304,46 @@ pub fn split_rect(rect: Rect, orientation: Orientation, ratio: f32) -> (Rect, Re
 fn contains_bite(node: &Node, target_id: u64) -> bool {
     match node {
         Node::Bite { id, .. } => *id == target_id,
-        Node::Spoon { first, second, .. } => contains_bite(first, target_id) || contains_bite(second, target_id),
+        Node::Spoon { first, second, .. } => {
+            contains_bite(first, target_id) || contains_bite(second, target_id)
+        }
     }
 }
 
 fn point_in_rect(rect: Rect, x: u16, y: u16) -> bool {
     x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::layout::Rect;
+
+    use crate::layout::split_rect;
+    use crate::model::Orientation;
+
+    #[test]
+    fn split_rect_small_width_no_underflow() {
+        let rect = Rect {
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 10,
+        };
+        let (left, right) = split_rect(rect, Orientation::Vertical, 0.5);
+        assert_eq!(left.width, 1);
+        assert_eq!(right.width, 0);
+    }
+
+    #[test]
+    fn split_rect_small_height_no_underflow() {
+        let rect = Rect {
+            x: 0,
+            y: 0,
+            width: 10,
+            height: 1,
+        };
+        let (top, bottom) = split_rect(rect, Orientation::Horizontal, 0.5);
+        assert_eq!(top.height, 1);
+        assert_eq!(bottom.height, 0);
+    }
 }

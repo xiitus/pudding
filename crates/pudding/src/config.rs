@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -10,16 +11,16 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Self {
+    pub fn load() -> Result<Self> {
         let path = config_file_path();
         if let Ok(data) = fs::read_to_string(&path) {
-            if let Ok(cfg) = serde_json::from_str::<Config>(&data) {
-                return cfg;
-            }
+            return serde_json::from_str::<Config>(&data)
+                .with_context(|| format!("invalid config file: {}", path.display()));
         }
         let cfg = Config::default();
-        let _ = cfg.save();
-        cfg
+        cfg.save()
+            .with_context(|| format!("failed to write config: {}", path.display()))?;
+        Ok(cfg)
     }
 
     pub fn save(&self) -> std::io::Result<()> {

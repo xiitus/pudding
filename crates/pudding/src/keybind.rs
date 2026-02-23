@@ -35,7 +35,10 @@ pub fn parse_keybinding(input: &str) -> Option<KeyBinding> {
             mods |= KeyModifiers::SHIFT;
         }
         let code = KeyCode::Char(ch);
-        return Some(KeyBinding { code, modifiers: mods });
+        return Some(KeyBinding {
+            code,
+            modifiers: mods,
+        });
     }
 
     let lower = key_part.to_lowercase();
