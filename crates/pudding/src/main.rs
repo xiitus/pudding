@@ -22,7 +22,7 @@ use crate::{
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let config = Config::load();
+    let config = Config::load()?;
 
     match cli.command {
         None => run_template("default", &config),

@@ -24,6 +24,27 @@ pnpm add -g ./packages/npm
 bun add -g ./packages/npm
 ```
 
+`pudding` コマンドは次の順で実行バイナリを探索します。
+- `PUDDING_BIN_PATH` で指定した**絶対パス**
+- `CARGO_TARGET_DIR/release/pudding`
+- ワークスペース配下の `target/release/pudding`
+
+新方針:
+- `PUDDING_BIN_PATH` が相対パスの場合は起動せず明示的にエラー終了します。
+- `cwd`（カレントディレクトリ）配下の探索は行いません。
+
+見つからない場合は、`cargo build -p pudding --release` を実行してください。
+
+配布導線のセルフチェック:
+```bash
+pnpm --dir packages/npm run verify:distribution
+bun run --cwd packages/npm verify:distribution
+```
+
+### 権限ハードニング方針（npm ランチャー）
+- 実行対象は通常ファイルかつ実行可能ビットがあるもののみ許可します。
+- シンボリックリンクや world-writable なバイナリは拒否し、fail-closed で終了します。
+
 ## 使い方
 ### テンプレート編集
 ```bash
