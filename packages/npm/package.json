@@ -1,0 +1,17 @@
+{
+  "name": "pudding",
+  "version": "0.1.0",
+  "description": "Minimal pane multiplexer (Rust core)",
+  "license": "MIT",
+  "os": ["darwin", "linux"],
+  "bin": {
+    "pudding": "bin/pudding.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "files": [
+    "bin",
+    "scripts"
+  ]
+}

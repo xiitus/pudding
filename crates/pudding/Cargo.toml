@@ -1,0 +1,18 @@
+[package]
+name = "pudding"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+description = "Minimal pane multiplexer inspired by zellij"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ratatui = "0.26"
+crossterm = "0.27"
+portable-pty = "0.8"
+strip-ansi-escapes = "0.2"
+dirs = "5.0"
