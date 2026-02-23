@@ -318,8 +318,8 @@ fn point_in_rect(rect: Rect, x: u16, y: u16) -> bool {
 mod tests {
     use ratatui::layout::Rect;
 
-    use crate::layout::{clamp_ratio, split_rect};
-    use crate::model::Orientation;
+    use crate::layout::{clamp_ratio, next_id, split_rect};
+    use crate::model::{Node, Orientation};
 
     #[test]
     fn split_rect_small_width_no_underflow() {
@@ -372,5 +372,41 @@ mod tests {
         let (high_left, high_right) = split_rect(rect, Orientation::Vertical, 1.0);
         assert_eq!(high_left.width, 9);
         assert_eq!(high_right.width, 1);
+    }
+
+    #[test]
+    fn clamp_ratio_handles_far_out_of_range_values() {
+        assert_eq!(clamp_ratio(-10.0), 0.1);
+        assert_eq!(clamp_ratio(10.0), 0.9);
+    }
+
+    #[test]
+    fn next_id_uses_max_even_when_ids_are_duplicated() {
+        let node = Node::Spoon {
+            id: 10,
+            orientation: Orientation::Vertical,
+            ratio: 0.5,
+            first: Box::new(Node::Bite {
+                id: 3,
+                name: "a".to_string(),
+                command: "sh".to_string(),
+            }),
+            second: Box::new(Node::Spoon {
+                id: 3,
+                orientation: Orientation::Horizontal,
+                ratio: 0.5,
+                first: Box::new(Node::Bite {
+                    id: 9,
+                    name: "b".to_string(),
+                    command: "sh".to_string(),
+                }),
+                second: Box::new(Node::Bite {
+                    id: 9,
+                    name: "c".to_string(),
+                    command: "sh".to_string(),
+                }),
+            }),
+        };
+        assert_eq!(next_id(&node), 11);
     }
 }

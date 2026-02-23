@@ -1,6 +1,14 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::paths::config_dir;
 
@@ -26,9 +34,10 @@ impl Config {
     pub fn save(&self) -> std::io::Result<()> {
         let path = config_file_path();
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            ensure_dir_secure(parent)?;
         }
-        fs::write(path, serde_json::to_string_pretty(self).unwrap())
+        let data = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
+        write_private_file(&path, &data)
     }
 }
 
@@ -56,4 +65,24 @@ impl Default for Config {
 
 pub fn config_file_path() -> PathBuf {
     config_dir().join("pudding").join("config.json")
+}
+
+fn ensure_dir_secure(path: &Path) -> io::Result<()> {
+    fs::create_dir_all(path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+fn write_private_file(path: &Path, content: &str) -> io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+
+    file.write_all(content.as_bytes())
 }

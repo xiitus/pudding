@@ -48,6 +48,7 @@ use runtime_main_area::main_area;
 use runtime_terminal_size::terminal_size;
 
 const OUTPUT_LIMIT: usize = 2000;
+const PENDING_CHAR_LIMIT: usize = 8192;
 
 struct PaneProcess {
     master: Box<dyn portable_pty::MasterPty + Send>,
@@ -88,6 +89,16 @@ impl PaneProcess {
                         let mut lines: Vec<&str> = combined.split('\n').collect();
                         let last = lines.pop().unwrap_or("");
                         pending = last.to_string();
+                        if pending.chars().count() > PENDING_CHAR_LIMIT {
+                            pending = pending
+                                .chars()
+                                .rev()
+                                .take(PENDING_CHAR_LIMIT)
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .rev()
+                                .collect();
+                        }
                         let mut guard = output_clone.lock().unwrap();
                         for line in lines {
                             guard.push_back(line.to_string());
