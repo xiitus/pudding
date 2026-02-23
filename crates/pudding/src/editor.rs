@@ -148,8 +148,12 @@ impl EditorApp {
     }
 
     fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<bool> {
-        if let Some(input) = &mut self.input {
-            return Ok(self.handle_input_key(input, key));
+        if let Some(mut input) = self.input.take() {
+            let close = self.handle_input_key(&mut input, key);
+            if !close {
+                self.input = Some(input);
+            }
+            return Ok(false);
         }
 
         let main = main_area(area);
@@ -202,10 +206,10 @@ impl EditorApp {
         match key.code {
             KeyCode::Enter => {
                 self.apply_input(input);
-                self.input = None;
+                return true;
             }
             KeyCode::Esc => {
-                self.input = None;
+                return true;
             }
             KeyCode::Backspace => {
                 input.buffer.pop();

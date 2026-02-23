@@ -69,13 +69,14 @@ impl PaneProcess {
                     Ok(0) => break,
                     Ok(n) => {
                         let chunk = String::from_utf8_lossy(&buf[..n]);
-                        let stripped = strip_ansi_escapes::strip(chunk.as_bytes()).unwrap_or_default();
+                        let stripped = strip_ansi_escapes::strip(chunk.as_bytes());
                         let text = String::from_utf8_lossy(&stripped).replace('\r', "");
-                        pending.push_str(&text);
-                        let mut lines: Vec<&str> = pending.split('\n').collect();
-                        if let Some(last) = lines.pop() {
-                            pending = last.to_string();
-                        }
+                        let mut combined = String::new();
+                        std::mem::swap(&mut combined, &mut pending);
+                        combined.push_str(&text);
+                        let mut lines: Vec<&str> = combined.split('\n').collect();
+                        let last = lines.pop().unwrap_or("");
+                        pending = last.to_string();
                         let mut guard = output_clone.lock().unwrap();
                         for line in lines {
                             guard.push_back(line.to_string());
@@ -276,8 +277,12 @@ impl RuntimeApp {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
-        if let Some(prompt) = &mut self.prompt {
-            return Ok(self.handle_prompt_key(prompt, key));
+        if let Some(mut prompt) = self.prompt.take() {
+            let close = self.handle_prompt_key(&mut prompt, key);
+            if !close {
+                self.prompt = Some(prompt);
+            }
+            return Ok(false);
         }
 
         for (binding, action) in self.actions.iter() {
@@ -367,10 +372,10 @@ impl RuntimeApp {
                         }
                     }
                 }
-                self.prompt = None;
+                return true;
             }
             KeyCode::Esc => {
-                self.prompt = None;
+                return true;
             }
             KeyCode::Backspace => {
                 prompt.buffer.pop();
@@ -397,9 +402,10 @@ impl RuntimeApp {
             &self.config.default_command,
         );
         if did {
-        let size = main_area(terminal_size());
-        let mut rects = Vec::new();
-        layout_rects(&self.template.layout, size, &mut rects);
+            let full = terminal_size();
+            let size = main_area(full);
+            let mut rects = Vec::new();
+            layout_rects(&self.template.layout, size, &mut rects);
             if let Some((_, rect)) = rects.iter().find(|(id, _)| *id == new_id) {
                 if let Some(Node::Bite { name, command, .. }) = crate::layout::find_bite(&self.template.layout, new_id) {
                     let pane = PaneProcess::spawn(

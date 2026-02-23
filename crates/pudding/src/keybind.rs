@@ -18,7 +18,7 @@ pub fn parse_keybinding(input: &str) -> Option<KeyBinding> {
         return None;
     }
     let mut modifiers = KeyModifiers::empty();
-    let mut key_part = parts[parts.len() - 1].trim();
+    let key_part = parts[parts.len() - 1].trim();
     for part in &parts[..parts.len().saturating_sub(1)] {
         match part.trim().to_lowercase().as_str() {
             "ctrl" => modifiers |= KeyModifiers::CONTROL,
