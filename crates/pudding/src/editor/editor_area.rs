@@ -28,3 +28,22 @@ pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
         .split(vertical);
     horizontal[1]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{centered_rect, main_area};
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn main_area_reserves_help_bar() {
+        assert_eq!(main_area(Rect::new(0, 0, 60, 20)), Rect::new(0, 0, 60, 18));
+    }
+
+    #[test]
+    fn centered_rect_is_centered() {
+        assert_eq!(
+            centered_rect(10, 4, Rect::new(0, 0, 30, 14)),
+            Rect::new(10, 5, 10, 4)
+        );
+    }
+}

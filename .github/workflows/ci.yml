@@ -18,3 +18,35 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: cargo test
         run: cargo test --all-targets
+
+  package-manager-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manager: [pnpm, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        if: matrix.manager == 'pnpm'
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        if: matrix.manager == 'pnpm'
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.manager == 'bun'
+      - name: build release binary
+        run: cargo build -p pudding --release
+      - name: run postinstall (pnpm)
+        if: matrix.manager == 'pnpm'
+        run: pnpm --dir packages/npm run postinstall
+      - name: run distribution verify (pnpm)
+        if: matrix.manager == 'pnpm'
+        run: pnpm --dir packages/npm run verify:distribution
+      - name: run postinstall (bun)
+        if: matrix.manager == 'bun'
+        run: bun run --cwd packages/npm postinstall
+      - name: run distribution verify (bun)
+        if: matrix.manager == 'bun'
+        run: bun run --cwd packages/npm verify:distribution

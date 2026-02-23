@@ -35,6 +35,12 @@ bun add -g ./packages/npm
 
 見つからない場合は、`cargo build -p pudding --release` を実行してください。
 
+配布導線のセルフチェック:
+```bash
+pnpm --dir packages/npm run verify:distribution
+bun run --cwd packages/npm verify:distribution
+```
+
 ### 権限ハードニング方針（npm ランチャー）
 - 実行対象は通常ファイルかつ実行可能ビットがあるもののみ許可します。
 - シンボリックリンクや world-writable なバイナリは拒否し、fail-closed で終了します。
