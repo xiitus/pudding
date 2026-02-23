@@ -312,6 +312,12 @@ impl RuntimeApp {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
+        if matches!(key.code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'c'))
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            return Ok(true);
+        }
+
         if let Some(mut prompt) = self.prompt.take() {
             let close = self.handle_prompt_key(&mut prompt, key);
             if !close {

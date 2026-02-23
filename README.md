@@ -119,6 +119,10 @@ bun run --cwd packages/npm verify:distribution
 
 ## トラブルシュート
 
+- `pudding: command not found` が出る:
+  - PATH に入っていません。次のどちらかを実行してください。
+  - `cargo install --path crates/pudding`
+  - `alias pudding="<project-root>/target/release/pudding"`
 - `invalid config file` が出る:
   - `~/.config/pudding/config.json` のJSONが壊れています。修正するか削除して再生成してください。
 - テンプレート読み込みエラーが出る:
