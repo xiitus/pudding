@@ -14,6 +14,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph},
     Terminal,
 };
+use unicode_width::UnicodeWidthStr;
 
 mod editor_area;
 
@@ -210,7 +211,7 @@ impl EditorApp {
                     1,
                 );
                 f.render_widget(Paragraph::new(line), inner);
-                f.set_cursor(inner.x + prompt.len() as u16 + buffer.len() as u16, inner.y);
+                f.set_cursor(inner.x + UnicodeWidthStr::width(prompt) as u16 + UnicodeWidthStr::width(buffer.as_str()) as u16, inner.y);
             }
             InputMode::TabName { buffer } => {
                 let prompt = "新しいタブ名: ";
@@ -222,7 +223,7 @@ impl EditorApp {
                     1,
                 );
                 f.render_widget(Paragraph::new(line), inner);
-                f.set_cursor(inner.x + prompt.len() as u16 + buffer.len() as u16, inner.y);
+                f.set_cursor(inner.x + UnicodeWidthStr::width(prompt) as u16 + UnicodeWidthStr::width(buffer.as_str()) as u16, inner.y);
             }
             InputMode::ConfirmDelete { .. } => {
                 let line = Line::from("このペインを削除しますか？ (y/n)");
@@ -358,8 +359,9 @@ impl EditorApp {
             self.status_msg = "分割対象のペインがありません".to_string();
             return;
         };
+        let global_next = self.next_layout_id();
         if let Some(tab) = self.active_tab_mut() {
-            if split_node(&mut tab.root, target_id, direction, 0.5).is_some() {
+            if split_node(&mut tab.root, target_id, direction, 0.5, global_next).is_some() {
                 self.dirty = true;
                 self.status_msg = "分割しました".to_string();
             } else {

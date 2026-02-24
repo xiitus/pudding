@@ -69,10 +69,11 @@ pub fn split_node(
     target_id: u64,
     direction: Direction,
     ratio: f32,
+    start_id: u64,
 ) -> Option<u64> {
     find_node(root, target_id)?;
 
-    let split_id = next_id(root);
+    let split_id = start_id;
     let new_pane_id = split_id.checked_add(1)?;
     let target = find_node_mut(root, target_id)?;
 
@@ -356,7 +357,8 @@ mod tests {
     #[test]
     fn split_node_creates_split_and_keeps_ids_unique() {
         let mut tree = single_pane(1);
-        let new_pane_id = split_node(&mut tree, 1, Direction::Vertical, 0.0).unwrap();
+        let start = next_id(&tree);
+        let new_pane_id = split_node(&mut tree, 1, Direction::Vertical, 0.0, start).unwrap();
         assert_eq!(new_pane_id, 3);
 
         match &tree {
