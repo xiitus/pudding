@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     io::{Read, Write},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
     thread,
 };
 
@@ -60,7 +60,7 @@ impl PaneProcess {
                                 .rev()
                                 .collect();
                         }
-                        let mut guard = output_clone.lock().unwrap();
+                        let mut guard = lock_output(&output_clone);
                         for line in lines {
                             guard.push_back(line.to_string());
                             if guard.len() > OUTPUT_LIMIT {
@@ -96,9 +96,16 @@ impl PaneProcess {
     }
 
     pub(super) fn lines_for_height(&self, height: usize) -> Vec<String> {
-        let guard = self.output.lock().unwrap();
+        let guard = lock_output(&self.output);
         let total = guard.len();
         let start = total.saturating_sub(height);
         guard.iter().skip(start).cloned().collect()
+    }
+}
+
+fn lock_output(output: &Mutex<VecDeque<String>>) -> MutexGuard<'_, VecDeque<String>> {
+    match output.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
     }
 }

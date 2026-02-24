@@ -15,6 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Terminal,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     action::{actions_from_config, Action},
@@ -194,7 +195,10 @@ impl RuntimeApp {
                 },
             );
             f.set_cursor(
-                area.x + 1 + label.len() as u16 + prompt.buffer.len() as u16,
+                area.x
+                    + 1
+                    + UnicodeWidthStr::width(label.as_str()) as u16
+                    + UnicodeWidthStr::width(prompt.buffer.as_str()) as u16,
                 area.y + 1,
             );
         }

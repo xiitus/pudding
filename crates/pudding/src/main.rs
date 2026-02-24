@@ -29,8 +29,7 @@ fn main() -> Result<()> {
         Some(Command::Run { template }) => run_template(&template, &config),
         Some(Command::Template { command }) => match command {
             TemplateCommand::Edit { name } => {
-                let mut template = load_template(&name)?;
-                template.name = name;
+                let template = load_template(&name)?;
                 let _ = EditorApp::new(template).run()?;
                 Ok(())
             }
@@ -40,8 +39,7 @@ fn main() -> Result<()> {
 }
 
 fn run_template(name: &str, config: &Config) -> Result<()> {
-    let mut template = load_template(name)?;
-    template.name = name.to_string();
+    let template = load_template(name)?;
     let app = RuntimeApp::new(template, config.clone())?;
     app.run()
 }

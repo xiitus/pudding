@@ -18,11 +18,14 @@ pub fn load_template(name: &str) -> Result<Template> {
     let path = template_path(name);
     if path.exists() {
         let data = fs::read_to_string(&path)?;
-        let tpl = serde_json::from_str::<Template>(&data)?;
+        let mut tpl = serde_json::from_str::<Template>(&data)?;
         validate_template(&tpl)?;
+        tpl.name = name.to_string();
         Ok(tpl)
     } else {
-        Ok(default_template())
+        let mut tpl = default_template();
+        tpl.name = name.to_string();
+        Ok(tpl)
     }
 }
 

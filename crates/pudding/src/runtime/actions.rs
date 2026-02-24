@@ -118,8 +118,15 @@ impl RuntimeApp {
                             pixel_height: 0,
                         },
                     );
-                    if let Ok(pane) = pane {
-                        self.panes.insert(new_id, pane);
+                    match pane {
+                        Ok(pane) => {
+                            self.panes.insert(new_id, pane);
+                        }
+                        Err(err) => {
+                            let _ = rollback_split_bite(&mut self.template.layout, new_id);
+                            self.status = format!("分割に失敗: {err}");
+                            return;
+                        }
                     }
                 }
             }
@@ -150,5 +157,36 @@ impl RuntimeApp {
                 pane.resize(rect.height.saturating_sub(2), rect.width.saturating_sub(2));
             }
         }
+    }
+}
+
+fn rollback_split_bite(node: &mut Node, new_bite_id: u64) -> bool {
+    let is_target = matches!(
+        node,
+        Node::Spoon { id, first, second, .. }
+            if *id == new_bite_id + 1
+                && matches!(first.as_ref(), Node::Bite { .. })
+                && matches!(second.as_ref(), Node::Bite { id, .. } if *id == new_bite_id)
+    );
+    if is_target {
+        let replaced = std::mem::replace(
+            node,
+            Node::Bite {
+                id: 0,
+                name: String::new(),
+                command: String::new(),
+            },
+        );
+        if let Node::Spoon { first, .. } = replaced {
+            *node = *first;
+            return true;
+        }
+    }
+
+    match node {
+        Node::Spoon { first, second, .. } => {
+            rollback_split_bite(first, new_bite_id) || rollback_split_bite(second, new_bite_id)
+        }
+        Node::Bite { .. } => false,
     }
 }

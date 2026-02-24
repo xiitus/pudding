@@ -4,6 +4,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{layout::layout_rects, model::Node};
 
@@ -75,7 +76,10 @@ impl EditorApp {
                 },
             );
             f.set_cursor(
-                area.x + 1 + prompt.len() as u16 + input.buffer.len() as u16,
+                area.x
+                    + 1
+                    + UnicodeWidthStr::width(prompt) as u16
+                    + UnicodeWidthStr::width(input.buffer.as_str()) as u16,
                 area.y + 1,
             );
         }
