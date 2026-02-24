@@ -119,10 +119,14 @@ bun run --cwd packages/npm verify:distribution
 
 ## トラブルシュート
 
+- `pudding: command not found` が出る:
+  - PATH に入っていません。次のどちらかを実行してください。
+  - `cargo install --path crates/pudding`
+  - `alias pudding="$(pwd)/target/release/pudding"`（リポジトリ直下で実行）
 - `invalid config file` が出る:
   - `~/.config/pudding/config.json` のJSONが壊れています。修正するか削除して再生成してください。
 - テンプレート読み込みエラーが出る:
-  - 名前制約違反、ID重複、`ratio` 範囲外（0と1を含まない）を確認してください。
+  - 名前制約違反、ID重複、`ratio` 範囲外（`0.1`〜`0.9`）を確認してください。
 - npm ラッパーで起動できない:
   - `PUDDING_BIN_PATH` が相対パスだと失敗します。絶対パスを指定してください。
 

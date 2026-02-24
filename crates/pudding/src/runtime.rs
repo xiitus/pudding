@@ -312,6 +312,10 @@ impl RuntimeApp {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
+        if self.is_quit_key(key) {
+            return Ok(true);
+        }
+
         if let Some(mut prompt) = self.prompt.take() {
             let close = self.handle_prompt_key(&mut prompt, key);
             if !close {
@@ -334,6 +338,12 @@ impl RuntimeApp {
         }
 
         Ok(false)
+    }
+
+    fn is_quit_key(&self, key: KeyEvent) -> bool {
+        self.actions
+            .iter()
+            .any(|(binding, action)| *action == Action::Quit && binding.matches(key))
     }
 
     fn handle_action(&mut self, action: Action) -> bool {
