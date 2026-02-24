@@ -99,8 +99,8 @@ pub fn point_in_rect(rect: Rect, x: u16, y: u16) -> bool {
 mod tests {
     use ratatui::layout::Rect;
 
-    use crate::model::Orientation;
     use super::{clamp_ratio, split_rect};
+    use crate::model::Orientation;
 
     #[test]
     fn split_rect_small_width_no_underflow() {

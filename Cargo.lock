@@ -497,6 +497,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strip-ansi-escapes",
+ "unicode-width",
 ]
 
 [[package]]
