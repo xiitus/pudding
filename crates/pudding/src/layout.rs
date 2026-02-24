@@ -79,7 +79,7 @@ pub fn split_node(
     let original = std::mem::replace(
         target,
         Node::Pane {
-            id: new_pane_id,
+            id: 0,
             command: None,
         },
     );

@@ -220,10 +220,14 @@ fn node_from_kdl(node: &KdlNode, next_id: &mut u64) -> Result<Node> {
         bail!("expected `pane` node, found `{}`", node.name().value());
     }
 
-    let id = node_u64(node, "id").unwrap_or_else(|| alloc_id(next_id));
-    if id >= *next_id {
-        *next_id = id + 1;
-    }
+    let id = if let Some(explicit_id) = node_u64(node, "id") {
+        if explicit_id >= *next_id {
+            *next_id = explicit_id + 1;
+        }
+        explicit_id
+    } else {
+        alloc_id(next_id)
+    };
 
     let pane_children: Vec<&KdlNode> = node
         .children()

@@ -34,7 +34,7 @@ pub fn parse_keybinding(input: &str) -> Option<KeyBinding> {
     if key_part.len() == 1 {
         let ch = key_part.chars().next()?;
         let mut mods = modifiers;
-        if ch.is_uppercase() {
+        if ch.is_uppercase() && !mods.contains(KeyModifiers::SHIFT) {
             mods |= KeyModifiers::SHIFT;
         }
         return Some(KeyBinding {

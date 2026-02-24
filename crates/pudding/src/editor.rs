@@ -21,7 +21,7 @@ use self::editor_area::{centered_rect, editor_areas, main_area};
 
 use crate::{
     layout::{
-        collect_panes, delete_node, find_node_mut, find_pane_at, layout_rects, next_id, split_node,
+        collect_panes, delete_node, find_node_mut, find_pane_at, layout_rects, split_node,
         DeleteNodeError,
     },
     model::{Direction, Layout, Node, Tab},
@@ -541,12 +541,14 @@ impl EditorApp {
     }
 
     fn next_layout_id(&self) -> u64 {
-        self.layout
+        let max_id = self
+            .layout
             .tabs
             .iter()
-            .map(|tab| next_id(&tab.root))
+            .map(|tab| max_node_id(&tab.root))
             .max()
-            .unwrap_or(1)
+            .unwrap_or(0);
+        max_id.saturating_add(1)
     }
 
     fn reset_cursor(&mut self, main: Rect) {
@@ -596,5 +598,14 @@ impl EditorApp {
         if self.cursor.1 < max_y {
             self.cursor.1 += 1;
         }
+    }
+}
+
+fn max_node_id(node: &Node) -> u64 {
+    match node {
+        Node::Pane { id, .. } => *id,
+        Node::Split {
+            id, first, second, ..
+        } => (*id).max(max_node_id(first)).max(max_node_id(second)),
     }
 }

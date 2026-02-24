@@ -88,18 +88,20 @@ fn default_command_value() -> String {
 
 fn default_keybinds() -> HashMap<String, String> {
     [
+        ("cursor_left", "Left"),
+        ("cursor_right", "Right"),
+        ("cursor_up", "Up"),
+        ("cursor_down", "Down"),
         ("split_vertical", "v"),
         ("split_horizontal", "h"),
-        ("resize_left", "H"),
-        ("resize_right", "L"),
-        ("resize_up", "K"),
-        ("resize_down", "J"),
-        ("swap_vertical", "S"),
-        ("swap_horizontal", "s"),
-        ("save_state", "Ctrl+S"),
-        ("restore_state", "Ctrl+R"),
-        ("focus_next", "Tab"),
-        ("quit", "Ctrl+C"),
+        ("pane_command", "c"),
+        ("delete_pane", "d"),
+        ("add_tab", "T"),
+        ("rename_tab", "n"),
+        ("next_tab", "Tab"),
+        ("prev_tab", "Shift+Tab"),
+        ("save", "s"),
+        ("quit", "q"),
     ]
     .into_iter()
     .map(|(action, key)| (action.to_string(), key.to_string()))
