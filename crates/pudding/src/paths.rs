@@ -13,7 +13,3 @@ pub fn config_dir() -> PathBuf {
 pub fn templates_dir() -> PathBuf {
     config_dir().join("pudding").join("templates")
 }
-
-pub fn states_dir() -> PathBuf {
-    config_dir().join("pudding").join("states")
-}

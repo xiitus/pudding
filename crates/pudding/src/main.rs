@@ -1,47 +1,36 @@
-mod action;
 mod cli;
 mod config;
 mod editor;
-mod keybind;
 mod layout;
 mod model;
 mod paths;
-mod runtime;
 mod template;
+pub mod zellij;
 
 use anyhow::Result;
 use clap::Parser;
+use std::process;
 
-use crate::{
-    cli::{Cli, Command, TemplateCommand},
-    config::Config,
-    editor::EditorApp,
-    runtime::RuntimeApp,
-    template::load_template,
-};
+use crate::{cli::Cli, config::Config, editor::EditorApp};
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-    let config = Config::load()?;
-
-    match cli.command {
-        None => run_template("default", &config),
-        Some(Command::Run { template }) => run_template(&template, &config),
-        Some(Command::Template { command }) => match command {
-            TemplateCommand::Edit { name } => {
-                let mut template = load_template(&name)?;
-                template.name = name;
-                let _ = EditorApp::new(template).run()?;
-                Ok(())
-            }
-            TemplateCommand::Apply { name } => run_template(&name, &config),
-        },
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("{error}");
+        process::exit(1);
     }
 }
 
-fn run_template(name: &str, config: &Config) -> Result<()> {
-    let mut template = load_template(name)?;
-    template.name = name.to_string();
-    let app = RuntimeApp::new(template, config.clone())?;
-    app.run()
+fn run() -> Result<()> {
+    let cli = Cli::parse();
+    let _config = Config::load()?;
+    let layout = template::load(&cli.name)?;
+
+    if cli.dry_run {
+        let text = template::save_dry_run(&layout);
+        println!("{text}");
+        return Ok(());
+    }
+
+    EditorApp::new(layout, cli.name).run()?;
+    Ok(())
 }
