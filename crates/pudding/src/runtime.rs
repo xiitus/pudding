@@ -1,18 +1,12 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    io::{self, Read, Write},
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, io, time::Duration};
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use portable_pty::{CommandBuilder, PtySize};
+use portable_pty::PtySize;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -21,17 +15,19 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Terminal,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     action::{actions_from_config, Action},
     config::Config,
     keybind::KeyBinding,
-    layout::{
-        collect_bites, layout_rects, next_id, resize_from_bite, split_bite, swap_adjacent_bites,
-    },
-    model::{Node, Orientation, Template},
-    template::{load_state, save_state},
+    layout::layout_rects,
+    model::{Node, Template},
 };
+
+mod actions;
+mod pane_process;
+mod prompt;
 
 #[path = "runtime_centered_rect.rs"]
 mod runtime_centered_rect;
@@ -42,118 +38,12 @@ mod runtime_main_area;
 #[path = "runtime_terminal_size.rs"]
 mod runtime_terminal_size;
 
+use pane_process::PaneProcess;
+use prompt::InputPrompt;
 use runtime_centered_rect::centered_rect;
 use runtime_key_to_bytes::key_to_bytes;
 use runtime_main_area::main_area;
 use runtime_terminal_size::terminal_size;
-
-const OUTPUT_LIMIT: usize = 2000;
-const PENDING_CHAR_LIMIT: usize = 8192;
-const RESIZE_STEP_RATIO: f32 = 0.20;
-
-struct PaneProcess {
-    master: Box<dyn portable_pty::MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
-    _child: Box<dyn portable_pty::Child + Send>,
-    output: Arc<Mutex<VecDeque<String>>>,
-}
-
-impl PaneProcess {
-    fn spawn(command: String, size: PtySize) -> Result<Self> {
-        let pty_system = portable_pty::native_pty_system();
-        let pair = pty_system.openpty(size)?;
-        let mut cmd = CommandBuilder::new(&command);
-        cmd.env("TERM", "xterm-256color");
-        let child = pair.slave.spawn_command(cmd)?;
-        drop(pair.slave);
-
-        let reader = pair.master.try_clone_reader()?;
-        let writer = pair.master.take_writer()?;
-
-        let output = Arc::new(Mutex::new(VecDeque::new()));
-        let output_clone = output.clone();
-
-        thread::spawn(move || {
-            let mut reader = reader;
-            let mut buf = [0u8; 4096];
-            let mut pending = String::new();
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let chunk = String::from_utf8_lossy(&buf[..n]);
-                        let stripped = strip_ansi_escapes::strip(chunk.as_bytes());
-                        let text = String::from_utf8_lossy(&stripped).replace('\r', "");
-                        let mut combined = String::new();
-                        std::mem::swap(&mut combined, &mut pending);
-                        combined.push_str(&text);
-                        let mut lines: Vec<&str> = combined.split('\n').collect();
-                        let last = lines.pop().unwrap_or("");
-                        pending = last.to_string();
-                        if pending.chars().count() > PENDING_CHAR_LIMIT {
-                            pending = pending
-                                .chars()
-                                .rev()
-                                .take(PENDING_CHAR_LIMIT)
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                                .rev()
-                                .collect();
-                        }
-                        let mut guard = output_clone.lock().unwrap();
-                        for line in lines {
-                            guard.push_back(line.to_string());
-                            if guard.len() > OUTPUT_LIMIT {
-                                guard.pop_front();
-                            }
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
-        Ok(Self {
-            master: pair.master,
-            writer,
-            _child: child,
-            output,
-        })
-    }
-
-    fn resize(&mut self, rows: u16, cols: u16) {
-        let _ = self.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        });
-    }
-
-    fn write_bytes(&mut self, bytes: &[u8]) {
-        let _ = self.writer.write_all(bytes);
-        let _ = self.writer.flush();
-    }
-
-    fn lines_for_height(&self, height: usize) -> Vec<String> {
-        let guard = self.output.lock().unwrap();
-        let total = guard.len();
-        let start = total.saturating_sub(height);
-        guard.iter().skip(start).cloned().collect()
-    }
-}
-
-struct InputPrompt {
-    label: String,
-    buffer: String,
-    mode: PromptMode,
-}
-
-#[derive(Clone, Copy)]
-enum PromptMode {
-    Save,
-    Restore,
-}
 
 pub struct RuntimeApp {
     template: Template,
@@ -305,7 +195,10 @@ impl RuntimeApp {
                 },
             );
             f.set_cursor(
-                area.x + 1 + label.len() as u16 + prompt.buffer.len() as u16,
+                area.x
+                    + 1
+                    + UnicodeWidthStr::width(label.as_str()) as u16
+                    + UnicodeWidthStr::width(prompt.buffer.as_str()) as u16,
                 area.y + 1,
             );
         }
@@ -330,7 +223,6 @@ impl RuntimeApp {
             }
         }
 
-        // send to active pane
         if let Some(pane) = self.panes.get_mut(&self.active_id) {
             if let Some(bytes) = key_to_bytes(key) {
                 pane.write_bytes(&bytes);
@@ -338,211 +230,5 @@ impl RuntimeApp {
         }
 
         Ok(false)
-    }
-
-    fn is_quit_key(&self, key: KeyEvent) -> bool {
-        self.actions
-            .iter()
-            .any(|(binding, action)| *action == Action::Quit && binding.matches(key))
-    }
-
-    fn handle_action(&mut self, action: Action) -> bool {
-        match action {
-            Action::SplitVertical => {
-                self.split_active(Orientation::Vertical);
-            }
-            Action::SplitHorizontal => {
-                self.split_active(Orientation::Horizontal);
-            }
-            Action::ResizeLeft => {
-                let _ = resize_from_bite(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Vertical,
-                    -RESIZE_STEP_RATIO,
-                );
-                self.resize_all(terminal_size());
-            }
-            Action::ResizeRight => {
-                let _ = resize_from_bite(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Vertical,
-                    RESIZE_STEP_RATIO,
-                );
-                self.resize_all(terminal_size());
-            }
-            Action::ResizeUp => {
-                let _ = resize_from_bite(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Horizontal,
-                    -RESIZE_STEP_RATIO,
-                );
-                self.resize_all(terminal_size());
-            }
-            Action::ResizeDown => {
-                let _ = resize_from_bite(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Horizontal,
-                    RESIZE_STEP_RATIO,
-                );
-                self.resize_all(terminal_size());
-            }
-            Action::SwapVertical => {
-                let _ = swap_adjacent_bites(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Vertical,
-                );
-            }
-            Action::SwapHorizontal => {
-                let _ = swap_adjacent_bites(
-                    &mut self.template.layout,
-                    self.active_id,
-                    Orientation::Horizontal,
-                );
-            }
-            Action::SaveState => {
-                self.prompt = Some(InputPrompt {
-                    label: "保存名".to_string(),
-                    buffer: String::new(),
-                    mode: PromptMode::Save,
-                });
-            }
-            Action::RestoreState => {
-                self.prompt = Some(InputPrompt {
-                    label: "復元名".to_string(),
-                    buffer: String::new(),
-                    mode: PromptMode::Restore,
-                });
-            }
-            Action::FocusNext => {
-                self.focus_next();
-            }
-            Action::Quit => return true,
-        }
-        false
-    }
-
-    fn handle_prompt_key(&mut self, prompt: &mut InputPrompt, key: KeyEvent) -> bool {
-        match key.code {
-            KeyCode::Enter => {
-                let name = prompt.buffer.trim().to_string();
-                match prompt.mode {
-                    PromptMode::Save => {
-                        if !name.is_empty() {
-                            match save_state(&name, &self.template) {
-                                Ok(_) => {
-                                    self.status = format!("保存しました: {}", name);
-                                }
-                                Err(err) => {
-                                    self.status = format!("保存に失敗: {err}");
-                                }
-                            }
-                        }
-                    }
-                    PromptMode::Restore => {
-                        if !name.is_empty() {
-                            match load_state(&name) {
-                                Ok(tpl) => {
-                                    self.template = tpl;
-                                    self.panes.clear();
-                                    match self.spawn_all() {
-                                        Ok(_) => {
-                                            self.status = format!("復元しました: {}", name);
-                                        }
-                                        Err(err) => {
-                                            self.status = format!("復元に失敗: {err}");
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    self.status = format!("復元に失敗: {err}");
-                                }
-                            }
-                        }
-                    }
-                }
-                return true;
-            }
-            KeyCode::Esc => {
-                return true;
-            }
-            KeyCode::Backspace => {
-                prompt.buffer.pop();
-            }
-            KeyCode::Char(c) => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return false;
-                }
-                prompt.buffer.push(c);
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn split_active(&mut self, orientation: Orientation) {
-        let new_id = next_id(&self.template.layout);
-        let did = split_bite(
-            &mut self.template.layout,
-            self.active_id,
-            orientation,
-            0.5,
-            new_id,
-            &self.config.default_command,
-        );
-        if did {
-            let full = terminal_size();
-            let size = main_area(full);
-            let mut rects = Vec::new();
-            layout_rects(&self.template.layout, size, &mut rects);
-            if let Some((_, rect)) = rects.iter().find(|(id, _)| *id == new_id) {
-                if let Some(Node::Bite { command, .. }) =
-                    crate::layout::find_bite(&self.template.layout, new_id)
-                {
-                    let pane = PaneProcess::spawn(
-                        command.clone(),
-                        PtySize {
-                            rows: rect.height.saturating_sub(2),
-                            cols: rect.width.saturating_sub(2),
-                            pixel_width: 0,
-                            pixel_height: 0,
-                        },
-                    );
-                    if let Ok(pane) = pane {
-                        self.panes.insert(new_id, pane);
-                    }
-                }
-            }
-            self.resize_all(full);
-        }
-    }
-
-    fn focus_next(&mut self) {
-        let mut ids = Vec::new();
-        collect_bites(&self.template.layout, &mut ids);
-        if ids.is_empty() {
-            return;
-        }
-        if let Some(pos) = ids.iter().position(|id| *id == self.active_id) {
-            let next = (pos + 1) % ids.len();
-            self.active_id = ids[next];
-        } else {
-            self.active_id = ids[0];
-        }
-    }
-
-    fn resize_all(&mut self, area: ratatui::layout::Rect) {
-        let area = main_area(area);
-        let mut rects = Vec::new();
-        layout_rects(&self.template.layout, area, &mut rects);
-        for (id, rect) in rects {
-            if let Some(pane) = self.panes.get_mut(&id) {
-                pane.resize(rect.height.saturating_sub(2), rect.width.saturating_sub(2));
-            }
-        }
     }
 }
