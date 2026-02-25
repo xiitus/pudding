@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -12,17 +11,27 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::paths::config_dir;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub default_command: String,
-    pub keybinds: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConfigFileCompat {
+    #[serde(default = "default_command_value")]
+    default_command: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigFileV2<'a> {
+    default_command: &'a str,
 }
 
 impl Config {
     pub fn load() -> Result<Self> {
         let path = config_file_path();
         if let Ok(data) = fs::read_to_string(&path) {
-            return serde_json::from_str::<Config>(&data)
+            return Self::from_json(&data)
                 .with_context(|| format!("invalid config file: {}", path.display()));
         }
         let cfg = Config::default();
@@ -36,31 +45,35 @@ impl Config {
         if let Some(parent) = path.parent() {
             ensure_dir_secure(parent)?;
         }
-        let data = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
+        let data = self.to_json().map_err(io::Error::other)?;
         write_private_file(&path, &data)
+    }
+
+    fn from_json(data: &str) -> serde_json::Result<Self> {
+        let raw: ConfigFileCompat = serde_json::from_str(data)?;
+        Ok(Self {
+            default_command: raw.default_command,
+        })
+    }
+
+    fn to_json(&self) -> serde_json::Result<String> {
+        let raw = ConfigFileV2 {
+            default_command: &self.default_command,
+        };
+        serde_json::to_string_pretty(&raw)
     }
 }
 
 impl Default for Config {
     fn default() -> Self {
-        let mut keybinds = HashMap::new();
-        keybinds.insert("split_vertical".to_string(), "v".to_string());
-        keybinds.insert("split_horizontal".to_string(), "h".to_string());
-        keybinds.insert("resize_left".to_string(), "H".to_string());
-        keybinds.insert("resize_right".to_string(), "L".to_string());
-        keybinds.insert("resize_up".to_string(), "K".to_string());
-        keybinds.insert("resize_down".to_string(), "J".to_string());
-        keybinds.insert("swap_vertical".to_string(), "S".to_string());
-        keybinds.insert("swap_horizontal".to_string(), "s".to_string());
-        keybinds.insert("save_state".to_string(), "Ctrl+S".to_string());
-        keybinds.insert("restore_state".to_string(), "Ctrl+R".to_string());
-        keybinds.insert("focus_next".to_string(), "Tab".to_string());
-        keybinds.insert("quit".to_string(), "Ctrl+C".to_string());
         Config {
-            default_command: "bash".to_string(),
-            keybinds,
+            default_command: default_command_value(),
         }
     }
+}
+
+fn default_command_value() -> String {
+    "bash".to_string()
 }
 
 pub fn config_file_path() -> PathBuf {
@@ -85,4 +98,58 @@ fn write_private_file(path: &Path, content: &str) -> io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
 
     file.write_all(content.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn from_json_accepts_legacy_keybinds_shape() {
+        let cfg = Config::from_json(
+            r#"{
+                "default_command": "zsh",
+                "keybinds": {
+                    "split_vertical": "Ctrl+V",
+                    "quit": "q"
+                }
+            }"#,
+        )
+        .expect("legacy config should deserialize");
+
+        assert_eq!(cfg.default_command, "zsh");
+    }
+
+    #[test]
+    fn from_json_uses_default_command_when_missing() {
+        let cfg = Config::from_json(
+            r#"{
+                "keybinds": {
+                    "quit": "q"
+                }
+            }"#,
+        )
+        .expect("config without default_command should deserialize");
+
+        assert_eq!(cfg.default_command, "bash");
+    }
+
+    #[test]
+    fn to_json_writes_v2_minimal_shape() {
+        let cfg = Config {
+            default_command: "zsh".to_string(),
+        };
+
+        let json = cfg.to_json().expect("config should serialize");
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("serialized config should be valid JSON");
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "default_command": "zsh"
+            })
+        );
+        assert!(!json.contains("keybinds"));
+    }
 }
