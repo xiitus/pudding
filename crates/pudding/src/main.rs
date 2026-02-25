@@ -22,7 +22,7 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let _config = Config::load()?;
+    Config::load()?;
     let layout = template::load(&cli.name)?;
 
     if cli.dry_run {
